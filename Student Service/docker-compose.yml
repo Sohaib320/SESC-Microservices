@@ -1,0 +1,51 @@
+version: '3.8'
+
+networks:
+  default:
+    external: true
+    name: finance_default
+
+services:
+  studentdb:
+    image: mysql:8.0
+    restart: always
+    volumes:
+      - ./mysql-setup.sql:/docker-entrypoint-initdb.d/mysql-setup.sql
+      - student-db-data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_APPLICATION_USER}
+      MYSQL_PASSWORD: ${DB_APPLICATION_PASSWORD}
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  studentapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://studentdb:3306/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_APPLICATION_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_APPLICATION_PASSWORD}
+      FINANCE_SERVICE_URL: http://finance:8080
+      LIBRARY_SERVICE_URL: http://library:8070
+    ports:
+      - "8090:8090"
+    depends_on:
+      studentdb:
+        condition: service_healthy
+    networks:
+      - default
+    restart: on-failure
+
+volumes:
+  student-db-data:
